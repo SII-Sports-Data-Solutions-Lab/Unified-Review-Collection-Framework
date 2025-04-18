@@ -61,15 +61,13 @@ def accept_cookies(driver):
 
 def extract_products(driver, total_pages=1):
     """Extract products from all pages using URL pagination"""
-    base_url = "https://www.bestbuy.com/site/searchpage.jsp"
+    base_url = "https://www.bestbuy.com/site/searchpage.jsp?st=exercise+bike&qp=category_facet%3DSAAS%7EExercise+Bikes%7Epcmcat159400050010&id=pcat17071"
     all_products = []
     
     for page in range(1, total_pages + 1):
         print(f"Processing product page {page}/{total_pages}")
         params = {
-            "cp": page,
-            "id": "pcat17071",
-            "st": "treadmill"
+            "cp": page
         }
         
         driver.get(f"{base_url}?{'&'.join([f'{k}={v}' for k, v in params.items()])}")
@@ -82,44 +80,41 @@ def extract_products(driver, total_pages=1):
             items = driver.find_elements(By.CSS_SELECTOR, "li.sku-item")
             # Only get the first item
             if items:
-                item = items[0]
-                try:
-                    # Extract product details
-                    sku = item.get_attribute("data-sku-id")
-                    name_link = item.find_element(By.CSS_SELECTOR, "h4.sku-title a")
-                    name = name_link.text
-                    product_url = name_link.get_attribute("href")
-                    
-                    # Parse product slug from URL
-                    path_parts = urlparse(product_url).path.split('/')
-                    slug = path_parts[2] if len(path_parts) > 2 else None
-                    
-                    # Extract price
-                    price = item.find_element(By.CSS_SELECTOR, "div.priceView-customer-price span").text
-                    
-                    # Extract rating
-                    rating_element = item.find_elements(By.CSS_SELECTOR, "div.ugc-ratings-reviews")
-                    rating = rating_element[0].text.split()[0] if rating_element else None
-                    
-                    all_products.append({
-                        "sku": sku,
-                        "name": name,
-                        "slug": slug,
-                        "price": price,
-                        "rating": rating,
-                        "reviews": []
-                    })
-                    print(f"Extracted product: {name}")
-                except Exception as e:
-                    print(f"Error extracting product:", str(e))
+                for item in items:
+                    try:
+                        # Extract product details
+                        sku = item.get_attribute("data-sku-id")
+                        name_link = item.find_element(By.CSS_SELECTOR, "h4.sku-title a")
+                        name = name_link.text
+                        product_url = name_link.get_attribute("href")
+                        
+                        # Parse product slug from URL
+                        path_parts = urlparse(product_url).path.split('/')
+                        slug = path_parts[2] if len(path_parts) > 2 else None
+                        
+                        # Extract price
+                        price = item.find_element(By.CSS_SELECTOR, "div.priceView-customer-price span").text
+                        
+                        # Extract rating
+                        rating_element = item.find_elements(By.CSS_SELECTOR, "div.ugc-ratings-reviews")
+                        rating = rating_element[0].text.split()[0] if rating_element else None
+                        
+                        all_products.append({
+                            "sku": sku,
+                            "name": name,
+                            "slug": slug,
+                            "price": price,
+                            "rating": rating,
+                            "reviews": []
+                        })
+                        print(f"Extracted product: {name}")
+                    except Exception as e:
+                        print(f"Error extracting product:", str(e))
         
         except Exception as e:
             print(f"Error loading page {page}:", str(e))
-            continue
+            return all_products
         
-        # Break after getting one product
-        if all_products:
-            break
             
     return all_products
 
@@ -276,22 +271,6 @@ def save_to_database(products):
                             review_date = EXCLUDED.review_date,
                             review_helpful = EXCLUDED.review_helpful
                     """, review_data)
-                else:
-                    # If product has no reviews, create a single entry with product info only
-                    cur.execute("""
-                        INSERT INTO product_reviews (
-                            review_id, product_sku, product_name, product_slug,
-                            product_price, product_rating
-                        )
-                        VALUES (%s, %s, %s, %s, %s, %s)
-                    """, (
-                        str(uuid.uuid4()),  # Generate a UUID for products without reviews
-                        product['sku'],
-                        product['name'],
-                        product['slug'],
-                        product['price'],
-                        product['rating']
-                    ))
             
             conn.commit()
             print(f"Saved {len(products)} products with their reviews to the database")
@@ -429,7 +408,7 @@ def main():
         accept_cookies(driver)
         
         # Extract products
-        products = extract_products(driver, total_pages=5)
+        products = extract_products(driver, total_pages=2)
 
         if products:
             # Process all products
@@ -438,19 +417,24 @@ def main():
                 
                 # Extract reviews for the product
                 print(f"Processing reviews for {product['name']}")
-                product['reviews'] = extract_reviews(driver, product)
-                print(f"Found {len(product['reviews'])} reviews for {product['name']}")
-            
+                try:
+                    product['reviews'] = extract_reviews(driver, product)
+                    print(f"Found {len(product['reviews'])} reviews for {product['name']}")
+                except Exception as e:
+                    print(f"Error extracting reviews for {product['name']}: {str(e)}")
+                    product['reviews'] = []  # Set empty reviews list on error
+                if not product['reviews']:
+                    print(f"No reviews found for {product['name']}")
             # Save all products with their reviews to database
             save_to_database(products)
         else:
             print("No products found")
         
         # Example SKU for Bowflex T22 Treadmill
-        sku = "632590-100910"
-        reviews = fetch_turnto_reviews(sku)
-        if reviews:
-            save_turnto_reviews_to_db(reviews)
+        # sku = "632590-100910"
+        # reviews = fetch_turnto_reviews(sku)
+        # if reviews:
+        #     save_turnto_reviews_to_db(reviews)
         
     finally:
         driver.quit()

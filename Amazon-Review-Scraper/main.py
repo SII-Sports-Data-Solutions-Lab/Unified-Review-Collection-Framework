@@ -44,15 +44,44 @@ headers = {
    'viewport-width': '560'
 }
 
+def search_amazon_pages(name, max_pages=20):
+    all_products = []
+    
+    for page in range(1, max_pages + 1):
+        try:
+            print(f"Searching page {page} of {max_pages}")
+            url = f"https://www.amazon.com/s?k={name}&page={page}"
+            response = requests.request("GET", url, headers=headers, data={})
+            soup = BeautifulSoup(response.text, "html.parser")
+            
+            # Extract products from current page
+            page_products = []
+            for item in soup.find_all("div", {"data-asin": True}):
+                data_asin = item.get("data-asin", None)
+                title_tag = item.find("h2")
+                title = title_tag.get_text(strip=True) if title_tag else None
+                
+                h2_tag = item.find("h2", class_="a-size-medium a-spacing-none a-color-base a-text-normal")
+                aria_label = h2_tag["aria-label"] if h2_tag and "aria-label" in h2_tag.attrs else None
+                
+                if data_asin and title:
+                    page_products.append({
+                        "data_asin": data_asin, 
+                        "title": title.lower() if title else None,
+                        "description": aria_label.lower() if aria_label else None
+                    })
+            
+            all_products.extend(page_products) # Add delay between pages to avoid rate limiting
+            
+        except Exception as e:
+            log_error(f"Error processing page {page}: {e}")
+            continue
+    
+    return all_products
 
-name = "peloton"
-
-# Step 2: Define the Amazon URL for the target search
-url = f"https://www.amazon.com/s?k={name}"  # Example search query for "laptops"
-
-# Step 3: Send a GET request
-response = requests.request("GET", url, headers=headers, data={})
-soup = BeautifulSoup(response.text, "html.parser")
+# Replace the existing search logic with the new paginated search
+name = "exercise bike"
+products = search_amazon_pages(name)
 
 stars = {
     'one_star': 1,
@@ -63,25 +92,6 @@ stars = {
 }
 
 # Step 4: Extract product details
-
-products = []
-#driver = configure_driver()
-
-for item in soup.find_all("div", {"data-asin": True}):
-    # Extract `data-asin` for product ID
-    data_asin = item.get("data-asin", None)
-    
-    # Extract the product title from the h2 element
-    title_tag = item.find("h2")
-    title = title_tag.get_text(strip=True) if title_tag else None
-
-    h2_tag = item.find("h2", class_="a-size-medium a-spacing-none a-color-base a-text-normal")
-    aria_label = h2_tag["aria-label"] if h2_tag and "aria-label" in h2_tag.attrs else None
-
-    # Append the product details
-    if data_asin and title:
-        products.append({"data_asin": data_asin, "title": title.lower() if title else None, "description": aria_label.lower() if aria_label else None})
-
 
 product_products = [
     product for product in products if product["title"] and product["title"] == name.lower() or (product['description'] and name.lower() in product['description'])
@@ -125,7 +135,7 @@ def get_review_text(soup_object: BeautifulSoup) -> str:
 def insert_reviews_to_db(reviews, product_asin, product_title, product_description):
     try:
         conn = psycopg2.connect(
-            dbname="cda1f23e499f",
+            dbname="SII",
             user="admin",
             password="raghu@123",
             host="raghuserver",
@@ -262,7 +272,6 @@ def get_total_pages(soup):
 
 def get_reviews_from_page(reviews, soup, star):
     try:
-        sleep(1)
         for review in soup.find_all('li', {'data-hook': 'review'}):
             try:
                 review_data = {
@@ -288,7 +297,6 @@ def get_reviews_from_page(reviews, soup, star):
 # Step 5: Extract product reviews
 def fetch_reviews(product_asin, max_pages=5):
     reviews = []
-    sleep(2)
     for star in stars:
         try:
             url = f"https://www.amazon.com/product-reviews/{product_asin}?filterByStar={star}&reviewerType=avp_only_reviews"

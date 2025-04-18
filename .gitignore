@@ -5,14 +5,33 @@
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
+.Python
 
 # Distribution / packaging
 build/
+develop-eggs/
 dist/
+downloads/
 eggs/
 .eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
 *.egg-info/
+.installed.cfg
 *.egg
+MANIFEST
+.env
+.venv
+env/
+venv/
+ENV/
+.env.local
+*.log
 .prerelease-version
 
 # Unit test / coverage reports
@@ -58,6 +77,7 @@ frontend/protobuf/proto.d.ts
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+.pnpm-debug.log*
 
 # Yarn files
 **/.yarn/*
@@ -78,6 +98,18 @@ tsconfig.tsbuildinfo
 
 # Coverage directory used by tools like istanbul
 coverage/
+
+# Environment files
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Next.js
+.next
+
+# Parcel
+.cache
+.parcel-cache
 
 ########################################################################
 # Streamlit
@@ -133,3 +165,14 @@ frontend/cypress/snapshots/linux/1x
 
 # Performance suite output
 **/.benchmarks/
+
+# IDE
+*.swp
+*.swo
+Thumbs.db
+
+# Project specific
+raw_data/*.json
+SII/Lib/
+SII/Scripts/
+SII/Include/

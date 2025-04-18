@@ -83,6 +83,7 @@ def insert_reviews(conn, reviews):
             for review in reviews:
                 details = review.get('details', {})
                 badges = review.get('badges', {})
+                metrics = review.get('metrics', {})
 
                 created_date = datetime.utcfromtimestamp(details.get('created_date')/ 1000) if details.get('created_date') else None
                 updated_date = datetime.utcfromtimestamp(details.get('updated_date') / 1000) if details.get('updated_date')else None
@@ -92,7 +93,7 @@ def insert_reviews(conn, reviews):
                     'legacy_id': review.get('legacy_id'),
                     'review_id': review.get('review_id'),
                     'internal_review_id': review.get('internal_review_id'),
-                    'rating': details.get('rating'),  
+                    'rating': metrics.get('rating'),  
                     'title': details.get('headline'),
                     'type': review.get('type'),
                     'details': details.get('comments'),  
