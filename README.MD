@@ -1,4 +1,4 @@
-# SII Sentiment Analysis Project
+# Unified Review Collection Framework for Major E-commerce sites
 
 This project is a comprehensive web scraping and analysis solution designed to collect and analyze product reviews from multiple fitness equipment retailers.
 
