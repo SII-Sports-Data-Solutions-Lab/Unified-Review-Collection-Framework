@@ -120,25 +120,15 @@ def get_all_reviews(reviewed_id, delay=1):
     return reviews
 
 
-
-if __name__ == "__main__":
-    products = get_product_data()
-
-    all_reviews = {}
-
-    for product in products:
-        tcin = product['tcin']
-        name = product['item']['product_description'].get('title', 'No name available')
-        print(f"Fetching reviews for TCIN: {tcin}")
-        reviews = get_all_reviews(tcin)
-
-        data_to_insert = [
+def save_reviews_to_db(reviews, product_name):
+    """Save reviews to the database."""
+    data_to_insert = [
         (
             ensure_uuid(review.get("id")),
             ensure_uuid(review.get("external_id")),
             review.get("channel"),
-            tcin,  # Common tcin
-            name,  # Common product name
+            review.get("tcin"),  # Common tcin
+            product_name,  # Common product name
             review.get("Rating"),
             review.get("RatingRange"),
             json.dumps(review.get("SecondaryRatingsOrder", [])),  # Serialize list to JSON, default to empty list
@@ -166,60 +156,82 @@ if __name__ == "__main__":
             review.get("is_incentivized")
         )
         for review in reviews
-        ]
+    ]
 
-        conn = create_connection()
-        
-        try:
-            with conn:
-                with conn.cursor() as cur:
-                    # Batch insert query
-                    query = """
-                        INSERT INTO target_reviews (
-                            id, external_id, channel, tcin, product_name, rating, rating_range,
-                            secondary_ratings_order, secondary_ratings, title, review_text,
-                            is_recommended, is_verified, status, photos, badges_order, badges,
-                            source_client, is_ratings_only, client_response_count, client_responses,
-                            entities, tags, author, is_syndicated, feedback, submitted_at, modified_at,
-                            reviewer_attributes, is_incentivized
-                        ) VALUES (
-                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
-                        )
-                        ON CONFLICT (id) DO UPDATE SET
-                            external_id = EXCLUDED.external_id,
-                            channel = EXCLUDED.channel,
-                            tcin = EXCLUDED.tcin,
-                            product_name = EXCLUDED.product_name,
-                            rating = EXCLUDED.rating,
-                            rating_range = EXCLUDED.rating_range,
-                            secondary_ratings_order = EXCLUDED.secondary_ratings_order,
-                            secondary_ratings = EXCLUDED.secondary_ratings,
-                            title = EXCLUDED.title,
-                            review_text = EXCLUDED.review_text,
-                            is_recommended = EXCLUDED.is_recommended,
-                            is_verified = EXCLUDED.is_verified,
-                            status = EXCLUDED.status,
-                            photos = EXCLUDED.photos,
-                            badges_order = EXCLUDED.badges_order,
-                            badges = EXCLUDED.badges,
-                            source_client = EXCLUDED.source_client,
-                            is_ratings_only = EXCLUDED.is_ratings_only,
-                            client_response_count = EXCLUDED.client_response_count,
-                            client_responses = EXCLUDED.client_responses,
-                            entities = EXCLUDED.entities,
-                            tags = EXCLUDED.tags,
-                            author = EXCLUDED.author,
-                            is_syndicated = EXCLUDED.is_syndicated,
-                            feedback = EXCLUDED.feedback,
-                            submitted_at = EXCLUDED.submitted_at,
-                            modified_at = EXCLUDED.modified_at,
-                            reviewer_attributes = EXCLUDED.reviewer_attributes,
-                            is_incentivized = EXCLUDED.is_incentivized;
-                    """
-                    
-                    # Execute batch insert
-                    execute_batch(cur, query, data_to_insert)
-                    
-        finally:
-            conn.close()
+    conn = create_connection()
+    
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                # Batch insert query
+                query = """
+                    INSERT INTO target_reviews (
+                        id, external_id, channel, tcin, product_name, rating, rating_range,
+                        secondary_ratings_order, secondary_ratings, title, review_text,
+                        is_recommended, is_verified, status, photos, badges_order, badges,
+                        source_client, is_ratings_only, client_response_count, client_responses,
+                        entities, tags, author, is_syndicated, feedback, submitted_at, modified_at,
+                        reviewer_attributes, is_incentivized
+                    ) VALUES (
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                    )
+                    ON CONFLICT (id) DO UPDATE SET
+                        external_id = EXCLUDED.external_id,
+                        channel = EXCLUDED.channel,
+                        tcin = EXCLUDED.tcin,
+                        product_name = EXCLUDED.product_name,
+                        rating = EXCLUDED.rating,
+                        rating_range = EXCLUDED.rating_range,
+                        secondary_ratings_order = EXCLUDED.secondary_ratings_order,
+                        secondary_ratings = EXCLUDED.secondary_ratings,
+                        title = EXCLUDED.title,
+                        review_text = EXCLUDED.review_text,
+                        is_recommended = EXCLUDED.is_recommended,
+                        is_verified = EXCLUDED.is_verified,
+                        status = EXCLUDED.status,
+                        photos = EXCLUDED.photos,
+                        badges_order = EXCLUDED.badges_order,
+                        badges = EXCLUDED.badges,
+                        source_client = EXCLUDED.source_client,
+                        is_ratings_only = EXCLUDED.is_ratings_only,
+                        client_response_count = EXCLUDED.client_response_count,
+                        client_responses = EXCLUDED.client_responses,
+                        entities = EXCLUDED.entities,
+                        tags = EXCLUDED.tags,
+                        author = EXCLUDED.author,
+                        is_syndicated = EXCLUDED.is_syndicated,
+                        feedback = EXCLUDED.feedback,
+                        submitted_at = EXCLUDED.submitted_at,
+                        modified_at = EXCLUDED.modified_at,
+                        reviewer_attributes = EXCLUDED.reviewer_attributes,
+                        is_incentivized = EXCLUDED.is_incentivized;
+                """
+                
+                # Execute batch insert
+                execute_batch(cur, query, data_to_insert)
+                
+    finally:
+        conn.close()
+
+
+def scrape_and_save_target_reviews(product_list=None):
+    """Reusable function to fetch and save Target reviews for a list of products."""
+    if product_list is None:
+        product_list = get_product_data()
+    for product in product_list:
+        tcin = product.get('tcin')
+        name = product.get('title', '').strip()
+        print(f"\nScraping reviews for {name} (TCIN: {tcin})")
+        reviews = get_all_reviews(tcin)
+        if reviews:
+            save_reviews_to_db(reviews, name)
+            print(f"Completed scraping for {name}")
+        else:
+            print(f"No reviews found for {name}")
+    print("\nAll Target products processed successfully!")
+
+
+if __name__ == "__main__":
+    products = get_product_data()
+    scrape_and_save_target_reviews(products)

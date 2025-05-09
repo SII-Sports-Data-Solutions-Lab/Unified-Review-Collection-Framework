@@ -64,7 +64,10 @@ def insert_reviews_into_db(equipment_type, reviews, conn):
     execute_values(conn.cursor(), insert_query, values)
     conn.commit()
 
-def main():
+def scrape_and_save_peloton_reviews(equipment_types=None):
+    """Reusable function to fetch and save Peloton reviews for a list of equipment types."""
+    if equipment_types is None:
+        equipment_types = ["BIKE", "BIKEPLUS", "TREAD", "TREADPLUS", "ROW"]
     conn = psycopg2.connect(
         dbname="cda1f23e499f",
         user="admin",
@@ -72,12 +75,16 @@ def main():
         host="raghuserver",
         port="5432"
     )
-
-    equipment_types = ["BIKE", "BIKEPLUS", "TREAD", "TREADPLUS", "ROW"]
     for equipment in equipment_types:
+        print(f"\nScraping reviews for {equipment}")
         fetch_all_reviews(equipment, conn)
-
+        print(f"Completed scraping for {equipment}")
     conn.close()
+    print("\nAll Peloton equipment processed successfully!")
+
+def main():
+    equipment_types = ["BIKE", "BIKEPLUS", "TREAD", "TREADPLUS", "ROW"]
+    scrape_and_save_peloton_reviews(equipment_types)
 
 if __name__ == "__main__":
     main()

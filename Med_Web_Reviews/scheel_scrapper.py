@@ -145,13 +145,20 @@ def save_turnto_reviews_to_db(reviews):
     finally:
         conn.close()
 
+def scrape_and_save_turnto_reviews(sku_list=None):
+    """Reusable function to fetch and save Turnto reviews for a list of SKUs."""
+    if sku_list is None:
+        sku_list = ["43619-NTL19124"]
+    for sku in sku_list:
+        reviews = fetch_turnto_reviews(sku)
+        if reviews:
+            save_turnto_reviews_to_db(reviews)
+
 # Example usage in main:
 def main():
     # Example SKU for Bowflex T22 Treadmill
     sku = "43619-NTL19124"
-    reviews = fetch_turnto_reviews(sku)
-    if reviews:
-        save_turnto_reviews_to_db(reviews)
+    scrape_and_save_turnto_reviews([sku])
 
 if __name__ == "__main__":
     main()

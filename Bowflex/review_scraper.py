@@ -6,7 +6,6 @@ from psycopg2 import sql
 from psycopg2.extras import execute_batch
 from datetime import datetime
 
-
 # Database configuration
 DB_CONFIG = {
     'user': 'admin',
@@ -60,7 +59,6 @@ def create_table(conn):
     except Exception as e:
         print(f"Error creating table: {e}")
         conn.rollback()
-
 
 def insert_reviews(conn, reviews):
     """Insert reviews into the database"""
@@ -119,11 +117,21 @@ def insert_reviews(conn, reviews):
         print(f"Error inserting reviews: {e}")
         conn.rollback()
 
-
-def scrape_all_reviews(product):
+def scrape_bowflex_reviews(product_id, product_name, save_to_db=True):
+    """
+    Scrape reviews for a specific Bowflex product
+    
+    Args:
+        product_id (int/str): The product ID from Bowflex
+        product_name (str): Name of the product
+        save_to_db (bool): Whether to save results to database (default: True)
+    
+    Returns:
+        list: List of reviews
+    """
     base_url = 'https://display.powerreviews.com'
     api_key = '61c24da0-253d-432e-b5a5-77e18cf226d9'
-    initial_url = f'{base_url}/m/710199/l/en_US/product/{product}/reviews?paging.from=0&paging.size=5&sort=Newest&image_only=false&page_locale=en_US&_noconfig=true&apikey={api_key}'
+    initial_url = f'{base_url}/m/710199/l/en_US/product/{product_id}/reviews?paging.from=0&paging.size=5&sort=Newest&image_only=false&page_locale=en_US&_noconfig=true&apikey={api_key}'
     
     all_reviews = []
     current_url = initial_url
@@ -137,18 +145,15 @@ def scrape_all_reviews(product):
             response.raise_for_status()
             data = response.json()
             
-            # Extract reviews
             if data.get('results'):
                 reviews = data['results'][0].get('reviews', [])
                 all_reviews.extend(reviews)
                 print(f'Collected {len(reviews)} reviews. Total: {len(all_reviews)}')
 
-            # Get next page URL
             paging = data.get('paging', {})
             next_page_path = paging.get('next_page_url')
 
             if next_page_path:
-                # Add API key to next page URL
                 if '?' in next_page_path:
                     current_url = f"{base_url}{next_page_path}&apikey={api_key}"
                 else:
@@ -156,7 +161,6 @@ def scrape_all_reviews(product):
             else:
                 current_url = None
 
-            # Respectful delay
             time.sleep(0.1)
 
         except requests.exceptions.RequestException as e:
@@ -167,25 +171,33 @@ def scrape_all_reviews(product):
             break
 
     for review in all_reviews:
-        review["type"] = products[product]
+        review["type"] = product_name
     
-    # Save results
-    conn = create_connection()
-    if conn:
-        create_table(conn)
-        insert_reviews(conn, all_reviews)
-        conn.close()
-        print('Review insertion completed')
+    if save_to_db:
+        conn = create_connection()
+        if conn:
+            create_table(conn)
+            insert_reviews(conn, all_reviews)
+            conn.close()
+            print('Review insertion completed')
+    
+    return all_reviews
+
+def scrape_all_products():
+    """Scrape reviews for all predefined Bowflex products"""
+    products = {
+        101012: 'BowFlex IC Bike SE',
+        100894: 'BowFlex C6 Bike',
+        100910: 'BowFlex Treadmill 22',
+        100909: 'BowFlex Treadmill 10',
+        100998: 'BowFlex BXT8J Treadmill',
+        'HTM1439-01': 'BowFlex T9 Treadmill',
+        'velocore': 'BowFlex VeloCore Bike - 22'
+    }
+    
+    for product_id, product_name in products.items():
+        print(f"\nScraping reviews for {product_name}...")
+        scrape_bowflex_reviews(product_id, product_name)
 
 if __name__ == '__main__':
-    
-    products = {101012:'BowFlex IC Bike SE',
-            100894:'BowFlex C6 Bike',
-            100910:'BowFlex Treadmill 22',
-            100909:'BowFlex Treadmill 10',
-            100998:'BowFlex BXT8J Treadmill',
-            'HTM1439-01':'BowFlex T9 Treadmill',
-            'velocore':'BowFlex VeloCore Bike - 22'}
-    
-    for product in products:
-        scrape_all_reviews(product)
+    scrape_all_products()

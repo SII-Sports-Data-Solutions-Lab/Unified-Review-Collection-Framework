@@ -401,14 +401,32 @@ def save_turnto_reviews_to_db(reviews):
     finally:
         conn.close()
 
-def main():
+def scrape_bestbuy_reviews(db_config=None, total_pages=1, search_query="exercise+bike", category_facet="SAAS%7EExercise+Bikes%7Epcmcat159400050010"):
+    """
+    Scrape BestBuy product reviews with customizable parameters.
+    
+    Args:
+        db_config (dict, optional): Database configuration dictionary. If None, uses default config.
+        total_pages (int, optional): Number of product pages to scrape. Defaults to 1.
+        search_query (str, optional): Product search query. Defaults to "exercise+bike".
+        category_facet (str, optional): Category filter. Defaults to exercise bikes category.
+    
+    Returns:
+        list: List of dictionaries containing product and review data
+    """
+    if db_config:
+        global DB_CONFIG
+        DB_CONFIG = db_config
+
     driver = setup_driver()
+    products = []
+    
     try:
         driver.get("https://www.bestbuy.com")
         accept_cookies(driver)
         
         # Extract products
-        products = extract_products(driver, total_pages=2)
+        products = extract_products(driver, total_pages)
 
         if products:
             # Process all products
@@ -422,22 +440,23 @@ def main():
                     print(f"Found {len(product['reviews'])} reviews for {product['name']}")
                 except Exception as e:
                     print(f"Error extracting reviews for {product['name']}: {str(e)}")
-                    product['reviews'] = []  # Set empty reviews list on error
+                    product['reviews'] = []
+                    
                 if not product['reviews']:
                     print(f"No reviews found for {product['name']}")
-            # Save all products with their reviews to database
-            save_to_database(products)
-        else:
-            print("No products found")
-        
-        # Example SKU for Bowflex T22 Treadmill
-        # sku = "632590-100910"
-        # reviews = fetch_turnto_reviews(sku)
-        # if reviews:
-        #     save_turnto_reviews_to_db(reviews)
-        
+                    
+            # Save to database if config is provided
+            if db_config:
+                save_to_database(products)
+                
     finally:
         driver.quit()
+        
+    return products
+
+def main():
+    products = scrape_bestbuy_reviews()
+    print(f"Scraped {len(products)} products with their reviews")
 
 if __name__ == "__main__":
     main()

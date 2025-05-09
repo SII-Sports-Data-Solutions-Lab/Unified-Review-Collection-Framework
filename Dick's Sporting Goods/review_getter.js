@@ -173,14 +173,21 @@ async function scrapeAllReviews(productId, productName) {
   }
 }
 
-// Main function
-async function main() {
-  const searchTerm = "exercise bike";
+// Scrape reviews for a specific search term
+async function scrapeReviewsBySearchTerm(searchTerm) {
   const productList = await getProducts(searchTerm);
+  const results = [];
 
   for (const [productId, productName] of productList) {
     await scrapeAllReviews(productId, productName);
+    results.push({ productId, productName });
   }
+  return results;
+}
+
+// Main function
+async function main() {
+  await scrapeReviewsBySearchTerm("exercise bike");
 }
 
 // Run the script if executed directly
@@ -190,6 +197,8 @@ if (require.main === module) {
 
 module.exports = {
   scrapeAllReviews,
+  scrapeReviewsBySearchTerm,
   fetchReviews,
-  parseReview
+  parseReview,
+  DB_CONFIG
 };

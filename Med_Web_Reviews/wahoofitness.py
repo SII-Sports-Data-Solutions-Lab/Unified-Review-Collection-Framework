@@ -150,14 +150,10 @@ def save_wahoo_reviews_to_db(reviews):
     finally:
         conn.close()
 
-def main():
-    """Main function to scrape Wahoo Fitness product reviews"""
-    # Wahoo Fitness product IDs - expanded list for more comprehensive data collection
-    product_ids = [
-        "548"
-    ]
-    
-    # Process each product
+def scrape_and_save_wahoo_reviews(product_ids=None):
+    """Reusable function to fetch and save Wahoo Fitness reviews for a list of product IDs."""
+    if product_ids is None:
+        product_ids = ["548"]
     for product_id in product_ids:
         print(f"\nProcessing Wahoo Fitness product ID: {product_id}")
         reviews = fetch_wahoo_reviews(product_id)
@@ -166,8 +162,16 @@ def main():
             print(f"Completed processing for product ID: {product_id}")
         else:
             print(f"No reviews found for product ID: {product_id}")
-    
     print("\nAll Wahoo Fitness products processed successfully!")
+
+def main():
+    """Main function to scrape Wahoo Fitness product reviews"""
+    # Wahoo Fitness product IDs - expanded list for more comprehensive data collection
+    product_ids = [
+        "548"
+    ]
+    
+    scrape_and_save_wahoo_reviews(product_ids)
 
 if __name__ == "__main__":
     main()

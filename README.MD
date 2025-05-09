@@ -1,42 +1,22 @@
 # SII Sentiment Analysis Project
 
-This project is a comprehensive web scraping and analysis solution designed to collect and analyze product reviews from multiple fitness equipment retailers. It stores the data in a PostgreSQL database and provides visualization through a Streamlit web application.
+This project is a comprehensive web scraping and analysis solution designed to collect and analyze product reviews from multiple fitness equipment retailers.
 
 ## Project Structure
 
 ### Web Scrapers
-- **Amazon-Review-Scraper/**
-  - `main.py`: Scrapes Amazon product reviews with pagination support (up to 20 pages)
-  - Support for product search, review extraction, and database storage
-  
-- **Peleton-Site-Review-Scraper/**
-  - `main.py`: Scrapes reviews from Peloton's website for different equipment types (BIKE, BIKEPLUS, TREAD, TREADPLUS, ROW)
-  
-- **Best-Buy/**
-  - `bestbuyreviews.py`: Scrapes Best Buy product reviews with pagination support
-  
-- **Dick's Sporting Goods/**
-  - `product_get.js`: Product information scraper
-  - `review_getter.js`: Review scraper with API integration
-  
-- **Bowflex/**
-  - `review_scraper.py`: Scrapes Bowflex product reviews using their API
-  
-- **Horizon-Reviews/**
-  - Node.js-based scraper for Horizon Fitness reviews using Puppeteer
-  
-- **Med_Web_Reviews/**
-  - `wahoofitness.py`: Wahoo Fitness review scraper
-  - `scheel_scrapper.py`: Scheel's review scraper
+- [Amazon-Review-Scraper/README.md](Amazon-Review-Scraper/README.md): Python tool for scraping Amazon product reviews with CLI and library support. Features product search, review extraction, PostgreSQL storage, and error logging.
+- [Peleton-Site-Review-Scraper/README.md](Peleton-Site-Review-Scraper/README.md): Python scraper for Peloton reviews. Supports scraping by equipment type, reusable as a function or script, and saves to PostgreSQL.
+- [Best-Buy/README.md](Best-Buy/README.md): Python scraper for Best Buy product reviews. Handles pagination, supports custom queries, and can store data in PostgreSQL.
+- [Dick's Sporting Goods/README.md](Dick's Sporting Goods/README.md): Node.js scraper for Dick's Sporting Goods reviews. Supports CLI and module usage, automatic pagination, and PostgreSQL integration.
+- [Bowflex/README.md](Bowflex/README.md): Python scraper for Bowflex reviews using their API. Supports multiple products, pagination, and PostgreSQL storage.
+- [Horizon-Reviews/README.md](Horizon-Reviews/README.md): Node.js Puppeteer-based scraper for Yotpo-powered reviews (e.g., Horizon Fitness). Handles dynamic content, popups, and PostgreSQL storage.
+- [Med_Web_Reviews/README.md](Med_Web_Reviews/README.md): Python scrapers for Wahoo Fitness (Yotpo API) and Scheel's (Turnto API). Reusable as functions or scripts, saves to PostgreSQL.
+- [Target/README.md](Target/README.md): Python scraper for Target reviews. Reusable as a function or script, saves to PostgreSQL.
+- [split_reviews_by_sentence/README.MD](split_reviews_by_sentence/README.MD): Python module to split reviews into sentences and store them in a database for further analysis.
 
-### Core Components
-- `webapp.py`: Streamlit web application for visualizing review data
-- `requirements.txt`: Python package dependencies
-
-## Setup Instructions
 
 ### Prerequisites
-
 - Python 3.8 or higher
 - PostgreSQL database
 - Node.js (for Dick's Sporting Goods and Horizon Fitness scrapers)
@@ -59,7 +39,7 @@ This project is a comprehensive web scraping and analysis solution designed to c
     ```sh
     cd Horizon-Reviews
     npm install
-    cd ../Dick\'s\ Sporting\ Goods
+    cd ../Dick's Sporting Goods
     npm install
     ```
 
@@ -67,46 +47,28 @@ This project is a comprehensive web scraping and analysis solution designed to c
 
 ### Running the Scrapers
 
-1. Amazon Reviews:
-    ```sh
-    cd Amazon-Review-Scraper
-    python main.py
-    ```
+- See each scraper's README for detailed usage and configuration instructions:
+    - [Amazon-Review-Scraper/README.md](Amazon-Review-Scraper/README.md)
+    - [Peleton-Site-Review-Scraper/README.md](Peleton-Site-Review-Scraper/README.md)
+    - [Best-Buy/README.md](Best-Buy/README.md)
+    - [Dick's Sporting Goods/README.md](Dick's Sporting Goods/README.md)
+    - [Bowflex/README.md](Bowflex/README.md)
+    - [Horizon-Reviews/README.md](Horizon-Reviews/README.md)
+    - [Med_Web_Reviews/README.md](Med_Web_Reviews/README.md)
+    - [Target/README.md](Target/README.md)
+    - [split_reviews_by_sentence/README.MD](split_reviews_by_sentence/README.MD)
 
-2. Peloton Reviews:
-    ```sh
-    cd Peleton-Site-Review-Scraper
-    python main.py
-    ```
-
-3. Horizon Fitness Reviews:
-    ```sh
-    cd Horizon-Reviews
-    node index.js
-    ```
-
-### Visualization Dashboard
-
-Launch the Streamlit web application:
-```sh
-streamlit run webapp.py
-```
-
-The dashboard provides:
-- Review filtering by retailer, rating, and date range
-- Equipment type filtering
-- Rating distribution visualization
-- Detailed review content display
 
 ## Features
 
-- Multi-platform review collection (Amazon, Peloton, Best Buy, Dick's, etc.)
+- Multi-platform review collection (Amazon, Peloton, Best Buy, Dick's, Bowflex, Horizon, Wahoo, Scheel's, Target, etc.)
 - Automated pagination handling
 - Rate limiting and request management
 - Error logging and handling
 - PostgreSQL database integration
 - Interactive data visualization
 - Support for various review metrics (rating, verified purchase, helpful votes, etc.)
+- Modular and reusable scraping functions
 
 ## Database Schema
 
@@ -117,6 +79,7 @@ The project uses multiple tables to store reviews from different sources:
 - dicks_reviews
 - horizon_reviews
 - wahoo_reviews
+- Additional tables for sentence splitting and raw data as needed
 
 Each table includes fields for:
 - Review ID
@@ -140,4 +103,6 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 - Puppeteer for JavaScript-based scraping
 - Various retailer APIs for data access
 
-Feel free to contribute to this project by submitting issues or pull requests.
+---
+
+For detailed instructions, features, and usage examples for each scraper, see the linked README files in each subfolder.

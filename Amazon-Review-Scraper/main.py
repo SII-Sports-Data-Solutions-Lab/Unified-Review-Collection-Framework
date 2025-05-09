@@ -5,6 +5,7 @@ from time import sleep
 import psycopg2
 from psycopg2.extras import execute_values
 import logging
+import argparse
 
 # Configure logging
 logging.basicConfig(
@@ -44,301 +45,334 @@ headers = {
    'viewport-width': '560'
 }
 
-def search_amazon_pages(name, max_pages=20):
-    all_products = []
-    
-    for page in range(1, max_pages + 1):
-        try:
-            print(f"Searching page {page} of {max_pages}")
-            url = f"https://www.amazon.com/s?k={name}&page={page}"
-            response = requests.request("GET", url, headers=headers, data={})
-            soup = BeautifulSoup(response.text, "html.parser")
-            
-            # Extract products from current page
-            page_products = []
-            for item in soup.find_all("div", {"data-asin": True}):
-                data_asin = item.get("data-asin", None)
-                title_tag = item.find("h2")
-                title = title_tag.get_text(strip=True) if title_tag else None
-                
-                h2_tag = item.find("h2", class_="a-size-medium a-spacing-none a-color-base a-text-normal")
-                aria_label = h2_tag["aria-label"] if h2_tag and "aria-label" in h2_tag.attrs else None
-                
-                if data_asin and title:
-                    page_products.append({
-                        "data_asin": data_asin, 
-                        "title": title.lower() if title else None,
-                        "description": aria_label.lower() if aria_label else None
-                    })
-            
-            all_products.extend(page_products) # Add delay between pages to avoid rate limiting
-            
-        except Exception as e:
-            log_error(f"Error processing page {page}: {e}")
-            continue
-    
-    return all_products
-
-# Replace the existing search logic with the new paginated search
-name = "exercise bike"
-products = search_amazon_pages(name)
-
-stars = {
-    'one_star': 1,
-    'two_star': 2,
-    'three_star': 3,
-    'four_star': 4,
-    'five_star': 5
-}
-
-# Step 4: Extract product details
-
-product_products = [
-    product for product in products if product["title"] and product["title"] == name.lower() or (product['description'] and name.lower() in product['description'])
-]
-
-print(product_products)
-
-# Function to extract reviews from the HTML page
-def get_reviews_from_html(page_html: str) -> BeautifulSoup:
-    try:
-        soup = BeautifulSoup(page_html, "lxml")
-        reviews = soup.find_all("div", {"class": "a-section celwidget"})
-        return reviews
-    except Exception as e:
-        log_error(f"Error extracting reviews from HTML: {e}")
-        return BeautifulSoup("", "lxml")
-
-
-# Function to get the review date
-def get_review_date(soup_object: BeautifulSoup):
-    try:
-        date_string = soup_object.find("span", {"class": "review-date"}).get_text()
-        return date_string.strip()
-    except Exception as e:
-        log_error(f"Error extracting review date: {e}")
-        return ""
-
-
-# Function to get the review text
-def get_review_text(soup_object: BeautifulSoup) -> str:
-    try:
-        review_text = soup_object.find(
-            "span", {"class": "a-size-base review-text review-text-content"}
-        ).get_text()
-        return review_text.strip()
-    except Exception as e:
-        log_error(f"Error extracting review text: {e}")
-        return ""
-
-
-def insert_reviews_to_db(reviews, product_asin, product_title, product_description):
-    try:
-        conn = psycopg2.connect(
-            dbname="SII",
-            user="admin",
-            password="raghu@123",
-            host="raghuserver",
-            port="5432"
-        )
-        cursor = conn.cursor()
-
-        insert_query = """
-        INSERT INTO amazon_reviews (
-            review_id, data_asin, product_title, product_description, rating, title, review_date, body
-        ) VALUES %s
-        ON CONFLICT (review_id) DO NOTHING;
+class AmazonReviewScraper:
+    def __init__(self, db_config=None):
+        """Initialize the scraper with optional database configuration.
+        
+        Args:
+            db_config (dict): Database configuration with keys:
+                - dbname: Database name
+                - user: Database user
+                - password: Database password
+                - host: Database host
+                - port: Database port
         """
+        self.headers = headers
+        self.db_config = db_config or {
+            "dbname": "SII",
+            "user": "admin",
+            "password": "raghu@123",
+            "host": "raghuserver",
+            "port": "5432"
+        }
 
-        review_values = [
-            (
-                review['review_id'],
-                product_asin,
-                product_title,
-                product_description,
-                review['rating'],
-                review['title'],
-                review['date'],
-                review['body']
-            )
-            for review in reviews
+    def search_amazon_pages(self, name, max_pages=20):
+        all_products = []
+        
+        for page in range(1, max_pages + 1):
+            try:
+                print(f"Searching page {page} of {max_pages}")
+                url = f"https://www.amazon.com/s?k={name}&page={page}"
+                response = requests.request("GET", url, headers=self.headers, data={})
+                soup = BeautifulSoup(response.text, "html.parser")
+                
+                # Extract products from current page
+                page_products = []
+                for item in soup.find_all("div", {"data-asin": True}):
+                    data_asin = item.get("data-asin", None)
+                    title_tag = item.find("h2")
+                    title = title_tag.get_text(strip=True) if title_tag else None
+                    
+                    h2_tag = item.find("h2", class_="a-size-medium a-spacing-none a-color-base a-text-normal")
+                    aria_label = h2_tag["aria-label"] if h2_tag and "aria-label" in h2_tag.attrs else None
+                    
+                    if data_asin and title:
+                        page_products.append({
+                            "data_asin": data_asin, 
+                            "title": title.lower() if title else None,
+                            "description": aria_label.lower() if aria_label else None
+                        })
+                
+                all_products.extend(page_products) # Add delay between pages to avoid rate limiting
+                
+            except Exception as e:
+                log_error(f"Error processing page {page}: {e}")
+                continue
+        
+        return all_products
+
+    def get_reviews_from_html(self, page_html: str) -> BeautifulSoup:
+        try:
+            soup = BeautifulSoup(page_html, "lxml")
+            reviews = soup.find_all("div", {"class": "a-section celwidget"})
+            return reviews
+        except Exception as e:
+            log_error(f"Error extracting reviews from HTML: {e}")
+            return BeautifulSoup("", "lxml")
+
+    def get_review_date(self, soup_object: BeautifulSoup):
+        try:
+            date_string = soup_object.find("span", {"class": "review-date"}).get_text()
+            return date_string.strip()
+        except Exception as e:
+            log_error(f"Error extracting review date: {e}")
+            return ""
+
+    def get_review_text(self, soup_object: BeautifulSoup) -> str:
+        try:
+            review_text = soup_object.find(
+                "span", {"class": "a-size-base review-text review-text-content"}
+            ).get_text()
+            return review_text.strip()
+        except Exception as e:
+            log_error(f"Error extracting review text: {e}")
+            return ""
+
+    def insert_reviews_to_db(self, reviews, product_asin, product_title, product_description):
+        try:
+            conn = psycopg2.connect(**self.db_config)
+            cursor = conn.cursor()
+
+            insert_query = """
+            INSERT INTO amazon_reviews (
+                review_id, data_asin, product_title, product_description, rating, title, review_date, body
+            ) VALUES %s
+            ON CONFLICT (review_id) DO NOTHING;
+            """
+
+            review_values = [
+                (
+                    review['review_id'],
+                    product_asin,
+                    product_title,
+                    product_description,
+                    review['rating'],
+                    review['title'],
+                    review['date'],
+                    review['body']
+                )
+                for review in reviews
+            ]
+
+            execute_values(cursor, insert_query, review_values)
+            conn.commit()
+        except Exception as e:
+            log_error(f"Error inserting reviews into database: {e}")
+        finally:
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()
+
+    def get_review_header(self, soup_object: BeautifulSoup) -> str:
+        try:
+            review_header = soup_object.find(
+                "a",
+                {
+                    "class": "a-size-base a-link-normal review-title a-color-base review-title-content a-text-bold"
+                },
+            ).get_text()
+            return review_header.strip()
+        except Exception as e:
+            log_error(f"Error extracting review header: {e}")
+            return ""
+
+    def get_number_stars(self, soup_object: BeautifulSoup) -> str:
+        try:
+            stars = soup_object.find("span", {"class": "a-icon-alt"}).get_text()
+            return stars.strip()
+        except Exception as e:
+            log_error(f"Error extracting number of stars: {e}")
+            return ""
+
+    def get_product_name(self, soup_object: BeautifulSoup) -> str:
+        try:
+            product = soup_object.find(
+                "a", {"class": "a-size-mini a-link-normal a-color-secondary"}
+            ).get_text()
+            return product.strip()
+        except Exception as e:
+            log_error(f"Error extracting product name: {e}")
+            return ""
+
+    def get_reviews(self, soup):
+        try:
+            reviews = self.get_reviews_from_html(str(soup))
+            scraped_reviews = []
+
+            for review in reviews:
+                try:
+                    # Extract each review's details using the helper functions
+                    r_title = self.get_review_header(review)
+                    r_rating = self.get_number_stars(review)
+                    r_content = self.get_review_text(review)
+                    r_date = self.get_review_date(review)
+                    r_product = self.get_product_name(review)
+
+                    # Organize the review data into a dictionary
+                    r = {
+                        "product": r_product,
+                        "title": r_title,
+                        "rating": r_rating,
+                        "content": r_content,
+                        "date": r_date
+                    }
+
+                    # Append the review to the list
+                    scraped_reviews.append(r)
+                except Exception as e:
+                    log_error(f"Error extracting review details: {e}")
+
+            return scraped_reviews
+        except Exception as e:
+            log_error(f"Error getting reviews: {e}")
+            return []
+
+    def get_total_pages(self, soup):
+        try:
+            # Find the review count div
+            review_info = soup.find('div', attrs={'data-hook': 'cr-filter-info-review-rating-count'})
+            if review_info:
+                # Extract the number of reviews (349 in your example)
+                text = review_info.text.strip()
+                review_count = int(text.split('with reviews')[0].split(',')[-1].strip())
+
+                # Calculate total pages (10 reviews per page)
+                total_pages = -(-review_count // 10)  # Ceiling division
+                return total_pages, review_count
+            return 1, 0
+        except Exception as e:
+            log_error(f"Error getting total pages: {e}")
+            return 1, 0
+
+    def get_reviews_from_page(self, reviews, soup, star):
+        try:
+            for review in soup.find_all('li', {'data-hook': 'review'}):
+                try:
+                    review_data = {
+                        'review_id': review.get('id'),
+                        'rating': star,
+                        'title': review.select_one('[data-hook="review-title"] span').text.strip(),
+                        'date': review.find('span', {'data-hook': 'review-date'}).text.split('on ')[-1],
+                        'verified_purchase': bool(review.find('span', {'data-hook': 'avp-badge'})),
+                        'body': review.find('span', {'data-hook': 'review-body'}).span.text.strip(),
+                        'images': [img['src'] for img in review.select('.review-image-tile')],
+                        'helpful_votes': review.find('span', {'data-hook': 'helpful-vote-statement'}).text.split()[0] if review.find('span', {'data-hook': 'helpful-vote-statement'}) else '0'
+                    }
+                    reviews.append(review_data)
+                except Exception as e:
+                    log_error(f"Error extracting review from page: {e}")
+            return reviews
+        except Exception as e:
+            log_error(f"Error getting reviews from page: {e}")
+            return reviews
+
+    def fetch_reviews(self, product_asin, max_pages=5):
+        stars = {
+            'one_star': 1,
+            'two_star': 2,
+            'three_star': 3,
+            'four_star': 4,
+            'five_star': 5
+        }
+        reviews = []
+        for star in stars:
+            try:
+                url = f"https://www.amazon.com/product-reviews/{product_asin}?filterByStar={star}&reviewerType=avp_only_reviews"
+
+                # Step 3: Send a GET request
+                response = requests.get(url, headers=self.headers)
+                
+                # Sample HTML parsing
+                soup = BeautifulSoup(response.text, 'html.parser')
+
+                for script in soup.find_all('script'):
+                    script.decompose()
+
+                total_pages, total_reviews = self.get_total_pages(soup)
+                page_number = total_pages
+
+                for page in range(1, page_number+1):
+                    try:
+                        url = f"https://www.amazon.com/product-reviews/{product_asin}?pageNumber={page}&filterByStar={star}&reviewerType=avp_only_reviews"
+                        response = requests.get(url, headers=self.headers)
+                        soup = BeautifulSoup(response.text, 'html.parser')
+                        for script in soup.find_all('script'):
+                            script.decompose()
+                        reviews = self.get_reviews_from_page(reviews, soup, stars[star])
+                    except Exception as e:
+                        log_error(f"Error fetching reviews from page {page} for ASIN {product_asin}: {e}")
+            except Exception as e:
+                log_error(f"Error fetching reviews for star rating {star} for ASIN {product_asin}: {e}")
+
+        return reviews
+
+    def scrape_product_reviews(self, search_term, max_pages=20):
+        """Main function to scrape Amazon product reviews.
+        
+        Args:
+            search_term (str): Product to search for on Amazon
+            max_pages (int): Maximum number of search result pages to process
+            
+        Returns:
+            list: List of products with their reviews
+        """
+        products = self.search_amazon_pages(search_term, max_pages)
+        
+        product_products = [
+            product for product in products 
+            if product["title"] and product["title"] == search_term.lower() 
+            or (product['description'] and search_term.lower() in product['description'])
         ]
 
-        execute_values(cursor, insert_query, review_values)
-        conn.commit()
-    except Exception as e:
-        log_error(f"Error inserting reviews into database: {e}")
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-
-# Call the function to insert reviews into the database
-for product in product_products:
-    try:
-        product_asin = product.get("data_asin")
-        product_title = product.get("title")
-        product_description = product.get("description")
-        reviews = product.get("reviews", [])
-        insert_reviews_to_db(reviews, product_asin, product_title, product_description)
-    except Exception as e:
-        log_error(f"Error processing product {product}: {e}")
-
-# Function to get the review header (title)
-def get_review_header(soup_object: BeautifulSoup) -> str:
-    try:
-        review_header = soup_object.find(
-            "a",
-            {
-                "class": "a-size-base a-link-normal review-title a-color-base review-title-content a-text-bold"
-            },
-        ).get_text()
-        return review_header.strip()
-    except Exception as e:
-        log_error(f"Error extracting review header: {e}")
-        return ""
-
-# Function to get the number of stars in the review
-def get_number_stars(soup_object: BeautifulSoup) -> str:
-    try:
-        stars = soup_object.find("span", {"class": "a-icon-alt"}).get_text()
-        return stars.strip()
-    except Exception as e:
-        log_error(f"Error extracting number of stars: {e}")
-        return ""
-
-# Function to get the product name
-def get_product_name(soup_object: BeautifulSoup) -> str:
-    try:
-        product = soup_object.find(
-            "a", {"class": "a-size-mini a-link-normal a-color-secondary"}
-        ).get_text()
-        return product.strip()
-    except Exception as e:
-        log_error(f"Error extracting product name: {e}")
-        return ""
-
-
-def get_reviews(soup):
-    try:
-        reviews = get_reviews_from_html(str(soup))
-        scraped_reviews = []
-
-        for review in reviews:
+        for product in product_products:
             try:
-                # Extract each review's details using the helper functions
-                r_title = get_review_header(review)
-                r_rating = get_number_stars(review)
-                r_content = get_review_text(review)
-                r_date = get_review_date(review)
-                r_product = get_product_name(review)
+                product_asin = product.get("data_asin")
+                if not product_asin:
+                    log_error(f"ASIN not found for product: {product}")
+                    continue
 
-                # Organize the review data into a dictionary
-                r = {
-                    "product": r_product,
-                    "title": r_title,
-                    "rating": r_rating,
-                    "content": r_content,
-                    "date": r_date
-                }
-
-                # Append the review to the list
-                scraped_reviews.append(r)
+                print(f"Fetching reviews for ASIN: {product_asin}")
+                product["reviews"] = self.fetch_reviews(product_asin)
+                self.insert_reviews_to_db(
+                    product["reviews"],
+                    product_asin,
+                    product.get("title"),
+                    product.get("description")
+                )
             except Exception as e:
-                log_error(f"Error extracting review details: {e}")
+                log_error(f"Error processing product {product}: {e}")
+        
+        return product_products
 
-        return scraped_reviews
-    except Exception as e:
-        log_error(f"Error getting reviews: {e}")
-        return []
+def scrape_amazon_reviews(search_term, max_pages=20, db_config=None):
+    """
+    Reusable function to scrape Amazon product reviews.
+    Args:
+        search_term (str): Product to search for on Amazon
+        max_pages (int): Maximum number of search result pages to process
+        db_config (dict): Optional database configuration
+    Returns:
+        list: List of products with their reviews
+    """
+    scraper = AmazonReviewScraper(db_config=db_config)
+    return scraper.scrape_product_reviews(search_term, max_pages)
 
-def get_total_pages(soup):
-    try:
-        # Find the review count div
-        review_info = soup.find('div', attrs={'data-hook': 'cr-filter-info-review-rating-count'})
-        if review_info:
-            # Extract the number of reviews (349 in your example)
-            text = review_info.text.strip()
-            review_count = int(text.split('with reviews')[0].split(',')[-1].strip())
+def main():
+    parser = argparse.ArgumentParser(description='Scrape Amazon product reviews')
+    parser.add_argument('search_term', help='Product to search for on Amazon')
+    parser.add_argument('--max-pages', type=int, default=20, help='Maximum number of search result pages to process')
+    parser.add_argument('--db-config', type=json.loads, help='JSON string with database configuration')
+    
+    args = parser.parse_args()
+    
+    scraper = AmazonReviewScraper(db_config=args.db_config)
+    products = scraper.scrape_product_reviews(args.search_term, args.max_pages)
+    
+    print(f"Found {len(products)} products")
+    for product in products:
+        print(f"Product: {product.get('title')} ({product.get('data_asin')})")
+        print(f"Number of reviews: {len(product.get('reviews', []))}")
 
-            # Calculate total pages (10 reviews per page)
-            total_pages = -(-review_count // 10)  # Ceiling division
-            return total_pages, review_count
-        return 1, 0
-    except Exception as e:
-        log_error(f"Error getting total pages: {e}")
-        return 1, 0
-
-def get_reviews_from_page(reviews, soup, star):
-    try:
-        for review in soup.find_all('li', {'data-hook': 'review'}):
-            try:
-                review_data = {
-                    'review_id': review.get('id'),
-                    'rating': star,
-                    'title': review.select_one('[data-hook="review-title"] span').text.strip(),
-                    'date': review.find('span', {'data-hook': 'review-date'}).text.split('on ')[-1],
-                    'verified_purchase': bool(review.find('span', {'data-hook': 'avp-badge'})),
-                    'body': review.find('span', {'data-hook': 'review-body'}).span.text.strip(),
-                    'images': [img['src'] for img in review.select('.review-image-tile')],
-                    'helpful_votes': review.find('span', {'data-hook': 'helpful-vote-statement'}).text.split()[0] if review.find('span', {'data-hook': 'helpful-vote-statement'}) else '0'
-                }
-                reviews.append(review_data)
-            except Exception as e:
-                log_error(f"Error extracting review from page: {e}")
-        return reviews
-    except Exception as e:
-        log_error(f"Error getting reviews from page: {e}")
-        return reviews
-
-
-
-# Step 5: Extract product reviews
-def fetch_reviews(product_asin, max_pages=5):
-    reviews = []
-    for star in stars:
-        try:
-            url = f"https://www.amazon.com/product-reviews/{product_asin}?filterByStar={star}&reviewerType=avp_only_reviews"
-
-            # Step 3: Send a GET request
-            response = requests.get(url, headers=headers)
-            
-            # Sample HTML parsing
-            soup = BeautifulSoup(response.text, 'html.parser')
-
-            for script in soup.find_all('script'):
-                script.decompose()
-
-            total_pages, total_reviews = get_total_pages(soup)
-            page_number = total_pages
-
-            for page in range(1, page_number+1):
-                try:
-                    url = f"https://www.amazon.com/product-reviews/{product_asin}?pageNumber={page}&filterByStar={star}&reviewerType=avp_only_reviews"
-                    response = requests.get(url, headers=headers)
-                    soup = BeautifulSoup(response.text, 'html.parser')
-                    for script in soup.find_all('script'):
-                        script.decompose()
-                    reviews = get_reviews_from_page(reviews, soup, stars[star])
-                except Exception as e:
-                    log_error(f"Error fetching reviews from page {page} for ASIN {product_asin}: {e}")
-        except Exception as e:
-            log_error(f"Error fetching reviews for star rating {star} for ASIN {product_asin}: {e}")
-
-    return reviews
-
-
-# Main script to fetch reviews for all products
-for product in product_products:
-    try:
-        product_asin = product.get("data_asin")
-        if not product_asin:
-            log_error(f"ASIN not found for product: {product}")
-            continue
-
-        print(f"Fetching reviews for ASIN: {product_asin}")
-        product["reviews"] = fetch_reviews(product_asin)
-        insert_reviews_to_db(product["reviews"], product_asin, product["title"], product["description"])
-    except Exception as e:
-        log_error(f"Error processing product {product}: {e}")
+if __name__ == "__main__":
+    main()
